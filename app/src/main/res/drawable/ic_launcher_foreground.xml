@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Libreta rayada con margen rojo, centrada en la zona segura del ícono adaptativo (108dp). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FBF8EF" android:pathData="M36,30h36a3,3 0,0 1,3 3v42a3,3 0,0 1,-3 3h-36a3,3 0,0 1,-3 -3v-42a3,3 0,0 1,3 -3z" />
+    <path android:fillColor="#C9D6EA" android:pathData="M39,42h33v1.5h-33z M39,50h33v1.5h-33z M39,58h33v1.5h-33z M39,66h33v1.5h-33z" />
+    <path android:fillColor="#C0392B" android:pathData="M44,30h1.5v48h-1.5z" />
+</vector>
