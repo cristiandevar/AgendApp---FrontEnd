@@ -9,6 +9,7 @@ import com.agendapp.AgendAppApplication
 import com.agendapp.data.repo.AuthRepository
 import com.agendapp.data.session.Usuario
 import com.agendapp.ui.inicio.InicioViewModel
+import com.agendapp.ui.libreta.LibretaViewModel
 import com.agendapp.ui.login.LoginViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +23,10 @@ val AppViewModelFactory = viewModelFactory {
     initializer {
         val c = app().container
         InicioViewModel(c.catalogoRepository, c.authRepository)
+    }
+    initializer {
+        val c = app().container
+        LibretaViewModel(c.catalogoRepository, c.movimientosRepository, c.authRepository)
     }
 }
 

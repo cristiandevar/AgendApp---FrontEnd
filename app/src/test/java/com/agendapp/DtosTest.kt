@@ -37,6 +37,11 @@ class DtosTest {
         assertEquals(2, lista.size)
         assertEquals(0, BigDecimal("600").compareTo(lista[0].precioCosto))
         assertEquals(BigDecimal("666.67"), lista[1].precioCosto)
+        assertEquals(null, lista[0].codigoBarra) // sin el campo: queda null
+        val conCodigo = jsonApi.decodeFromString<List<ProductoDto>>(
+            """[{"id":"a","nombre":"Café","precio_costo":900.0,"max_diario":2,"codigo_barra":"AGENDAPP-0003","activo":true,"actualizado":"2026-11-16T01:00:00-03:00"}]"""
+        )
+        assertEquals("AGENDAPP-0003", conCodigo[0].codigoBarra)
     }
 
     @Test

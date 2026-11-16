@@ -11,6 +11,12 @@ interface ProductoDao {
     @Query("SELECT * FROM productos WHERE activo = 1 ORDER BY nombre")
     fun observarActivos(): Flow<List<ProductoEntity>>
 
+    @Query("SELECT * FROM productos WHERE activo = 1 ORDER BY nombre")
+    suspend fun todosActivos(): List<ProductoEntity>
+
+    @Query("SELECT * FROM productos WHERE activo = 1 AND codigoBarra = :codigo LIMIT 1")
+    suspend fun porCodigo(codigo: String): ProductoEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(items: List<ProductoEntity>)
 
@@ -64,4 +70,52 @@ interface HorarioDao {
 
     @Query("DELETE FROM horarios")
     suspend fun borrarTodo()
+}
+
+@Dao
+interface FichajeDao {
+    @Query("SELECT * FROM fichajes WHERE empleadoId = :empleadoId ORDER BY fecha, hora")
+    fun observarDe(empleadoId: Int): Flow<List<FichajeEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun guardar(item: FichajeEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun guardarTodos(items: List<FichajeEntity>)
+
+    @Query("SELECT COUNT(*) FROM fichajes WHERE empleadoId = :empleadoId AND pendiente = 1")
+    suspend fun contarPendientes(empleadoId: Int): Int
+
+    @Query("DELETE FROM fichajes WHERE id LIKE 'demo-%'")
+    suspend fun borrarEjemplo()
+}
+
+@Dao
+interface RetiroDao {
+    @Query("SELECT * FROM retiros WHERE empleadoId = :empleadoId ORDER BY fecha, hora")
+    fun observarDe(empleadoId: Int): Flow<List<RetiroEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun guardar(item: RetiroEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun guardarTodos(items: List<RetiroEntity>)
+
+    @Query("SELECT COUNT(*) FROM retiros WHERE empleadoId = :empleadoId AND pendiente = 1")
+    suspend fun contarPendientes(empleadoId: Int): Int
+
+    @Query("DELETE FROM retiros WHERE id LIKE 'demo-%'")
+    suspend fun borrarEjemplo()
+}
+
+@Dao
+interface PagoDao {
+    @Query("SELECT * FROM pagos WHERE empleadoId = :empleadoId ORDER BY fecha, hora")
+    fun observarDe(empleadoId: Int): Flow<List<PagoEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun guardarTodos(items: List<PagoEntity>)
+
+    @Query("DELETE FROM pagos WHERE id LIKE 'demo-%'")
+    suspend fun borrarEjemplo()
 }
