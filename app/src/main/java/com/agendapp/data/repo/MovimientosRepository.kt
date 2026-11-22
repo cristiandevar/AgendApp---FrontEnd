@@ -16,6 +16,7 @@ import com.agendapp.dominio.Horario
 import com.agendapp.dominio.ORIGEN_ENCARGADO
 import com.agendapp.dominio.Pago
 import com.agendapp.dominio.ProductoDisponible
+import com.agendapp.dominio.Reglas
 import com.agendapp.dominio.Retiro
 import com.agendapp.dominio.Tarifa
 import com.agendapp.dominio.TipoFichaje
@@ -25,6 +26,8 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 /** Movimientos del empleado guardados en el celular y armado de sus datos para la libreta. */
 class MovimientosRepository(private val db: AppDatabase) {
@@ -62,6 +65,42 @@ class MovimientosRepository(private val db: AppDatabase) {
 
     suspend fun pendientes(empleadoId: Int): Int =
         db.fichajeDao().contarPendientes(empleadoId) + db.retiroDao().contarPendientes(empleadoId)
+
+    // ---------- Fichajes del empleado ----------
+
+    /** Fichajes del día leídos directo de la base (no del flujo), para controlar al tocar Aceptar. */
+    suspend fun fichajesDelDia(empleadoId: Int, fecha: LocalDate): List<Fichaje> =
+        db.fichajeDao().delDia(empleadoId, fecha.toString()).map { it.aDominio() }
+
+    suspend fun fichaje(id: String): Fichaje? = db.fichajeDao().porId(id)?.aDominio()
+
+    /** Guarda un fichaje ya controlado. Queda pendiente de sincronizar. */
+    suspend fun registrarFichaje(
+        empleadoId: Int,
+        fecha: LocalDate,
+        valido: Reglas.ControlFichaje.Valido,
+        registradoEn: OffsetDateTime,
+    ): Fichaje {
+        val entidad = FichajeEntity(
+            id = UUID.randomUUID().toString(),
+            empleadoId = empleadoId,
+            fecha = fecha.toString(),
+            hora = valido.hora.format(HORA_ISO),
+            tipo = valido.tipo.name,
+            motivo = valido.motivo,
+            fueraDeTolerancia = valido.fueraDeTolerancia,
+            registradoEn = registradoEn.toString(),
+            pendiente = true,
+        )
+        db.fichajeDao().guardar(entidad)
+        return entidad.aDominio()
+    }
+
+    /** Anula un fichaje (nunca se borra): queda tachado y pendiente de sincronizar. */
+    suspend fun anularFichaje(id: String, ahora: OffsetDateTime) {
+        val actual = db.fichajeDao().porId(id) ?: return
+        db.fichajeDao().guardar(actual.copy(anulado = true, anuladoEn = ahora.toString(), pendiente = true))
+    }
 
     // ---------- Datos de ejemplo (solo para probar en debug) ----------
     // Usan ids "demo-..." y no quedan pendientes: la sincronización (Fase 4) no los envía.
@@ -122,6 +161,9 @@ class MovimientosRepository(private val db: AppDatabase) {
 }
 
 // ---------- Conversión de Room al dominio ----------
+
+/** Horas guardadas como "HH:mm:ss", igual que las devuelve la API. */
+private val HORA_ISO = DateTimeFormatter.ofPattern("HH:mm:ss")
 
 private fun List<ParametroEntity>.entero(clave: String, porDefecto: Int) =
     firstOrNull { it.clave == clave }?.valor?.toInt() ?: porDefecto

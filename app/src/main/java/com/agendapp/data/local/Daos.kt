@@ -77,6 +77,12 @@ interface FichajeDao {
     @Query("SELECT * FROM fichajes WHERE empleadoId = :empleadoId ORDER BY fecha, hora")
     fun observarDe(empleadoId: Int): Flow<List<FichajeEntity>>
 
+    @Query("SELECT * FROM fichajes WHERE empleadoId = :empleadoId AND fecha = :fecha ORDER BY hora")
+    suspend fun delDia(empleadoId: Int, fecha: String): List<FichajeEntity>
+
+    @Query("SELECT * FROM fichajes WHERE id = :id")
+    suspend fun porId(id: String): FichajeEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun guardar(item: FichajeEntity)
 

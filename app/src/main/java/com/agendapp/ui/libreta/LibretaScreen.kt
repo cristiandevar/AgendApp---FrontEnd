@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -19,6 +22,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,7 +50,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.agendapp.BuildConfig
 import com.agendapp.data.session.Usuario
 import com.agendapp.dominio.ArmadoHoja
+import com.agendapp.dominio.Reglas
 import com.agendapp.dominio.Renglon
+import com.agendapp.dominio.TipoFichaje
 import com.agendapp.ui.AppViewModelFactory
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -61,7 +67,8 @@ private const val TOTAL_PAGINAS = 100_000
 /**
  * La libreta del empleado: una hoja por día. Deslizar a la izquierda → días siguientes;
  * a la derecha → días anteriores. Calendario para saltar a una fecha.
- * (Entrega 3a: solo lectura. El botón (+) para agregar eventos llega en la 3b.)
+ * En la hoja de hoy, el botón (+) abre el menú para agregar eventos; en los demás días
+ * se reemplaza por "Hoy". Los días que no son hoy son de solo lectura.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +85,12 @@ fun LibretaScreen(usuario: Usuario, vm: LibretaViewModel = viewModel(factory = A
     var confirmarSalida by rememberSaveable { mutableStateOf(false) }
     var pendientesAlSalir by remember { mutableStateOf(0) }
     var renglonElegido by remember { mutableStateOf<Renglon?>(null) }
+    var menuAgregar by remember { mutableStateOf(false) }
+    var fichajeAbierto by rememberSaveable { mutableStateOf(false) }
+
+    fun avisar(mensaje: String) {
+        alcance.launch { snackbar.showSnackbar(mensaje) }
+    }
 
     fun fechaDePagina(pagina: Int): LocalDate = hoy.plusDays((pagina - PAGINA_HOY).toLong())
     fun paginaDeFecha(fecha: LocalDate): Int = PAGINA_HOY + ChronoUnit.DAYS.between(hoy, fecha).toInt()
@@ -154,8 +167,36 @@ fun LibretaScreen(usuario: Usuario, vm: LibretaViewModel = viewModel(factory = A
             )
         },
         floatingActionButton = {
-            // En la hoja de hoy irá el botón (+) (entrega 3b); en los demás días, volver a hoy.
-            if (pager.currentPage != PAGINA_HOY) {
+            // En la hoja de hoy, el botón (+); en los demás días, volver a hoy.
+            val d = datos
+            if (pager.currentPage == PAGINA_HOY) {
+                if (d != null) {
+                    Box {
+                        FloatingActionButton(
+                            onClick = { menuAgregar = true },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ) { Icon(Icons.Filled.Add, contentDescription = "Agregar") }
+                        DropdownMenu(expanded = menuAgregar, onDismissRequest = { menuAgregar = false }) {
+                            val tipo = Reglas.siguienteTipo(d.fichajes.filter { it.fecha == LocalDate.now() })
+                            DropdownMenuItem(
+                                text = { Text(if (tipo == TipoFichaje.ENTRADA) "Fichaje · entrada" else "Fichaje · salida") },
+                                leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                                onClick = {
+                                    menuAgregar = false
+                                    fichajeAbierto = true
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Retiro de producto (próximamente)") },
+                                leadingIcon = { Icon(Icons.Filled.ShoppingCart, contentDescription = null) },
+                                enabled = false, // llega en la entrega 3c
+                                onClick = { menuAgregar = false },
+                            )
+                        }
+                    }
+                }
+            } else {
                 ExtendedFloatingActionButton(
                     onClick = { alcance.launch { pager.animateScrollToPage(PAGINA_HOY) } },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -183,7 +224,31 @@ fun LibretaScreen(usuario: Usuario, vm: LibretaViewModel = viewModel(factory = A
         }
     }
 
-    renglonElegido?.let { DetalleRenglon(it, alCerrar = { renglonElegido = null }) }
+    val d = datos
+    if (d != null) {
+        renglonElegido?.let { r ->
+            DetalleRenglon(
+                renglon = r,
+                datos = d,
+                alAnularFichaje = { f ->
+                    renglonElegido = null
+                    alcance.launch { snackbar.showSnackbar(vm.anularFichaje(f.id)) }
+                },
+                alCerrar = { renglonElegido = null },
+            )
+        }
+        if (fichajeAbierto) {
+            PopupFichaje(
+                datos = d,
+                alAceptar = { motivo -> vm.fichar(motivo) },
+                alRegistrar = { mensaje ->
+                    fichajeAbierto = false
+                    avisar(mensaje)
+                },
+                alCancelar = { fichajeAbierto = false },
+            )
+        }
+    }
 
     if (calendarioAbierto) {
         val estado = rememberDatePickerState(

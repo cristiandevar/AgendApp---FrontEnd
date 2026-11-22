@@ -42,7 +42,8 @@ app/src/main/java/com/agendapp/
 ## Tests
 
 `app/src/test` tiene tests unitarios con respuestas reales del backend (errores, DTOs, formato de pesos)
-y los tests del dominio (`dominio/CalculosTest.kt`), con los mismos casos que los tests del backend.
+y los tests del dominio (`dominio/CalculosTest.kt` y `dominio/FichajeTest.kt`), con los mismos casos y
+controles que el backend.
 
 **Datos de ejemplo (solo debug):** en la libreta, menú ⋮ → *Cargar datos de ejemplo* agrega movimientos
 en los 3 días anteriores para ver la hoja con contenido (entradas, salidas, retiros, un anulado, uno

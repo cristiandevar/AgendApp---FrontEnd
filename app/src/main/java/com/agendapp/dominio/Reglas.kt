@@ -4,6 +4,8 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
 /** Réplica de las reglas de agenda/reglas.py que el celular necesita para funcionar sin conexión. */
@@ -38,6 +40,83 @@ object Reglas {
         return Tolerancia(abs(minutos(referencia) - minutos(hora)) > toleranciaMinutos, referencia)
     }
 
+    private val HH_MM = DateTimeFormatter.ofPattern("HH:mm")
+
+    /**
+     * Igual que validar_secuencia: ordenados por hora, los fichajes vigentes deben alternar
+     * entrada, salida, entrada... empezando por entrada y sin horas repetidas.
+     * Devuelve el mensaje de error, o null si la secuencia es válida.
+     */
+    fun errorDeSecuencia(marcas: List<Pair<LocalTime, TipoFichaje>>): String? {
+        val ordenadas = marcas.sortedBy { it.first }
+        ordenadas.forEachIndexed { i, (hora, tipo) ->
+            val esperado = if (i % 2 == 0) TipoFichaje.ENTRADA else TipoFichaje.SALIDA
+            if (tipo != esperado) {
+                val texto = if (esperado == TipoFichaje.ENTRADA) "entrada" else "salida"
+                return "Secuencia inválida a las ${hora.format(HH_MM)}: se esperaba una $texto."
+            }
+            if (i > 0 && minutos(hora) == minutos(ordenadas[i - 1].first)) {
+                return "Hay dos fichajes a la misma hora (${hora.format(HH_MM)})."
+            }
+        }
+        return null
+    }
+
+    /** Resultado de controlar un fichaje nuevo del empleado al tocar Aceptar. */
+    sealed interface ControlFichaje {
+        /** Se puede registrar tal cual. */
+        data class Valido(
+            val tipo: TipoFichaje,
+            val hora: LocalTime,
+            val fueraDeTolerancia: Boolean,
+            val referencia: LocalTime?,
+            val motivo: String,
+        ) : ControlFichaje
+
+        /** La hora quedó fuera de la tolerancia (o no hay horario) y falta el motivo. */
+        data class FaltaMotivo(val referencia: LocalTime?) : ControlFichaje
+
+        /** No se puede registrar (secuencia u hora del celular). */
+        data class Rechazado(val mensaje: String) : ControlFichaje
+    }
+
+    /**
+     * Controles de registrar_fichaje aplicados en el celular: el tipo sale del último
+     * fichaje vigente, la hora se registra al minuto y debe ser posterior al último fichaje
+     * (el servidor rechaza dos fichajes a la misma hora), y fuera de tolerancia el motivo es
+     * obligatorio.
+     */
+    fun controlarFichaje(
+        fichajesDelDia: List<Fichaje>,
+        horariosDelDia: List<Horario>,
+        toleranciaMinutos: Int,
+        ahora: LocalTime,
+        motivo: String,
+    ): ControlFichaje {
+        val hora = ahora.truncatedTo(ChronoUnit.MINUTES)
+        val ultimo = ultimoFichajeVigente(fichajesDelDia)
+        if (ultimo != null) {
+            val ultimaHora = ultimo.hora.format(HH_MM)
+            if (minutos(hora) == minutos(ultimo.hora)) {
+                return ControlFichaje.Rechazado("Ya fichaste a las $ultimaHora. Esperá a que pase el minuto para volver a fichar.")
+            }
+            if (hora.isBefore(ultimo.hora)) {
+                return ControlFichaje.Rechazado(
+                    "La hora del celular (${hora.format(HH_MM)}) es anterior a tu último fichaje ($ultimaHora). " +
+                        "Revisá la fecha y hora del teléfono."
+                )
+            }
+        }
+        val tipo = siguienteTipo(fichajesDelDia)
+        val vigentes = fichajesDelDia.filter { !it.anulado }.map { it.hora to it.tipo }
+        errorDeSecuencia(vigentes + (hora to tipo))?.let { return ControlFichaje.Rechazado(it) }
+
+        val tolerancia = evaluarTolerancia(horariosDelDia, tipo, hora, toleranciaMinutos)
+        val motivoLimpio = motivo.trim()
+        if (tolerancia.fuera && motivoLimpio.isEmpty()) return ControlFichaje.FaltaMotivo(tolerancia.referencia)
+        return ControlFichaje.Valido(tipo, hora, tolerancia.fuera, tolerancia.referencia, motivoLimpio)
+    }
+
     /** Igual que dentro_del_plazo: el empleado puede cambiar su registro solo dentro del plazo. */
     fun dentroDelPlazo(registradoEn: OffsetDateTime?, anulado: Boolean, ahora: OffsetDateTime, plazoMinutos: Int): Boolean {
         if (anulado || registradoEn == null) return false
@@ -55,9 +134,18 @@ object Reglas {
      * dejaría la secuencia entrada/salida rota (por ejemplo, una salida sin entrada).
      */
     fun puedeAnularFichaje(f: Fichaje, fichajesDelDia: List<Fichaje>, ahora: OffsetDateTime, plazoMinutos: Int): Boolean =
-        !f.delEncargado &&
-            dentroDelPlazo(f.registradoEn, f.anulado, ahora, plazoMinutos) &&
-            ultimoFichajeVigente(fichajesDelDia)?.id == f.id
+        impedimentoParaAnular(f, fichajesDelDia, ahora, plazoMinutos) == null
+
+    /** Por qué el empleado no puede anular el fichaje, o null si puede. */
+    fun impedimentoParaAnular(f: Fichaje, fichajesDelDia: List<Fichaje>, ahora: OffsetDateTime, plazoMinutos: Int): String? =
+        when {
+            f.anulado -> "El fichaje ya está anulado."
+            f.delEncargado -> "Lo cargó el encargado: solo él puede corregirlo."
+            !dentroDelPlazo(f.registradoEn, f.anulado, ahora, plazoMinutos) ->
+                "Pasó el plazo de $plazoMinutos minutos para anularlo."
+            ultimoFichajeVigente(fichajesDelDia)?.id != f.id -> "Solo se puede anular el último fichaje del día."
+            else -> null
+        }
 
     fun puedeCambiarRetiro(r: Retiro, ahora: OffsetDateTime, plazoMinutos: Int): Boolean =
         !r.delEncargado && dentroDelPlazo(r.registradoEn, r.anulado, ahora, plazoMinutos)
