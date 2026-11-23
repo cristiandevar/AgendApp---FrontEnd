@@ -8,6 +8,7 @@ import com.agendapp.data.repo.CatalogoRepository
 import com.agendapp.data.repo.MovimientosRepository
 import com.agendapp.data.session.Usuario
 import com.agendapp.dominio.DatosEmpleado
+import com.agendapp.dominio.ProductoDisponible
 import com.agendapp.dominio.Reglas
 import com.agendapp.dominio.TipoFichaje
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,8 +24,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.agendapp.util.comoPesos
+import java.math.BigDecimal
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 private val HH_MM = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -33,6 +37,13 @@ sealed interface ResultadoFichaje {
     data class Registrado(val mensaje: String) : ResultadoFichaje
     data object FaltaMotivo : ResultadoFichaje
     data class Rechazado(val mensaje: String) : ResultadoFichaje
+}
+
+/** Lo que pasó al tocar Aceptar en el popup de retiro. */
+sealed interface ResultadoRetiro {
+    data class Guardado(val mensaje: String) : ResultadoRetiro
+    data object SinCambios : ResultadoRetiro
+    data class Rechazado(val mensaje: String) : ResultadoRetiro
 }
 
 data class EstadoDescargaLibreta(
@@ -122,6 +133,57 @@ class LibretaViewModel(
         val tipo = if (f.tipo == TipoFichaje.ENTRADA) "Entrada" else "Salida"
         "$tipo de las ${f.hora.format(HH_MM)} anulada."
     }
+
+    /**
+     * Registra un retiro nuevo (fecha y hora de este momento) o modifica [retiroId].
+     * Los controles se repiten acá con los retiros leídos de la base.
+     */
+    suspend fun guardarRetiro(productoId: String?, cantidad: Int, retiroId: String? = null): ResultadoRetiro =
+        escritura.withLock {
+            val u = usuario.value ?: return ResultadoRetiro.Rechazado("No hay una sesión iniciada.")
+            val d = datos.value ?: return ResultadoRetiro.Rechazado("Todavía se están cargando los datos.")
+            val ahora = OffsetDateTime.now()
+            val original = retiroId?.let { movimientos.retiro(it) ?: return ResultadoRetiro.Rechazado("No se encontró el retiro.") }
+            if (original != null) {
+                Reglas.impedimentoParaCambiarRetiro(original, ahora, d.plazoMinutos)?.let { return ResultadoRetiro.Rechazado(it) }
+            }
+            val fecha = original?.fecha ?: ahora.toLocalDate()
+            val control = Reglas.controlarRetiro(
+                productoId = productoId,
+                cantidad = cantidad,
+                productosActivos = d.productos,
+                retiros = movimientos.retirosDelDia(u.id, fecha),
+                fecha = fecha,
+                original = original,
+            )
+            when (control) {
+                is Reglas.ControlRetiro.Valido -> {
+                    val texto = "${control.cantidad} × ${control.producto.nombre} " +
+                        "(${control.precioCosto.multiply(BigDecimal(control.cantidad)).comoPesos()})"
+                    if (original == null) {
+                        movimientos.registrarRetiro(u.id, fecha, ahora.toLocalTime().truncatedTo(ChronoUnit.MINUTES), control, ahora)
+                        ResultadoRetiro.Guardado("Retiro registrado: $texto.")
+                    } else {
+                        movimientos.modificarRetiro(original.id, control)
+                        ResultadoRetiro.Guardado("Retiro modificado: $texto.")
+                    }
+                }
+                Reglas.ControlRetiro.SinCambios -> ResultadoRetiro.SinCambios
+                is Reglas.ControlRetiro.Rechazado -> ResultadoRetiro.Rechazado(control.mensaje)
+            }
+        }
+
+    /** Anula un retiro propio si todavía está en plazo. Devuelve el mensaje para mostrar. */
+    suspend fun anularRetiro(id: String): String = escritura.withLock {
+        val r = movimientos.retiro(id) ?: return "No se encontró el retiro."
+        val ahora = OffsetDateTime.now()
+        Reglas.impedimentoParaCambiarRetiro(r, ahora, datos.value?.plazoMinutos ?: 10)?.let { return it }
+        movimientos.anularRetiro(id, ahora)
+        "Retiro anulado: ${r.cantidad} × ${r.productoNombre}."
+    }
+
+    /** Producto activo con ese código (lo que leyó el escáner), o null si no hay. */
+    suspend fun productoPorCodigo(codigo: String): ProductoDisponible? = movimientos.productoPorCodigo(codigo)
 
     /** Cantidad de movimientos sin sincronizar (se avisa antes de cerrar sesión). */
     suspend fun pendientes(): Int = usuario.value?.let { movimientos.pendientes(it.id) } ?: 0

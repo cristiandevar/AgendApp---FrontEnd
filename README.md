@@ -42,11 +42,16 @@ app/src/main/java/com/agendapp/
 ## Tests
 
 `app/src/test` tiene tests unitarios con respuestas reales del backend (errores, DTOs, formato de pesos)
-y los tests del dominio (`dominio/CalculosTest.kt` y `dominio/FichajeTest.kt`), con los mismos casos y
-controles que el backend.
+y los tests del dominio (`dominio/CalculosTest.kt`, `FichajeTest.kt` y `RetiroTest.kt`), con los mismos
+casos y controles que el backend.
+Se corren desde Android Studio (clic derecho en la carpeta `test` → *Run Tests*) o con `gradlew test`.
 
 **Datos de ejemplo (solo debug):** en la libreta, menú ⋮ → *Cargar datos de ejemplo* agrega movimientos
 en los 3 días anteriores para ver la hoja con contenido (entradas, salidas, retiros, un anulado, uno
 fuera de horario, uno cargado por el encargado y un adelanto). *Borrar datos de ejemplo* los quita.
 No se sincronizan con el servidor.
-Se corren desde Android Studio (clic derecho en la carpeta `test` → *Run Tests*) o con `gradlew test`.
+
+**Escáner de códigos:** el popup de retiro usa el lector de Google Play Services (no pide permiso de
+cámara). El módulo se descarga una vez con internet; después funciona sin conexión. Para probarlo, el
+`seed_agenda` del backend asigna los códigos `AGENDAPP-0001` a `AGENDAPP-0008`: se puede generar un QR
+o código de barras con ese texto y escanearlo desde la pantalla de la PC.

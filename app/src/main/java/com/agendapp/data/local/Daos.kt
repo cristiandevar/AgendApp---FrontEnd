@@ -101,6 +101,12 @@ interface RetiroDao {
     @Query("SELECT * FROM retiros WHERE empleadoId = :empleadoId ORDER BY fecha, hora")
     fun observarDe(empleadoId: Int): Flow<List<RetiroEntity>>
 
+    @Query("SELECT * FROM retiros WHERE empleadoId = :empleadoId AND fecha = :fecha ORDER BY hora")
+    suspend fun delDia(empleadoId: Int, fecha: String): List<RetiroEntity>
+
+    @Query("SELECT * FROM retiros WHERE id = :id")
+    suspend fun porId(id: String): RetiroEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun guardar(item: RetiroEntity)
 

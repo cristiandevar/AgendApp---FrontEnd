@@ -44,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -52,6 +53,7 @@ import com.agendapp.data.session.Usuario
 import com.agendapp.dominio.ArmadoHoja
 import com.agendapp.dominio.Reglas
 import com.agendapp.dominio.Renglon
+import com.agendapp.dominio.Retiro
 import com.agendapp.dominio.TipoFichaje
 import com.agendapp.ui.AppViewModelFactory
 import kotlinx.coroutines.launch
@@ -87,6 +89,9 @@ fun LibretaScreen(usuario: Usuario, vm: LibretaViewModel = viewModel(factory = A
     var renglonElegido by remember { mutableStateOf<Renglon?>(null) }
     var menuAgregar by remember { mutableStateOf(false) }
     var fichajeAbierto by rememberSaveable { mutableStateOf(false) }
+    var retiroAbierto by remember { mutableStateOf(false) } // junto con retiroAModificar (no se guarda al rotar)
+    var retiroAModificar by remember { mutableStateOf<Retiro?>(null) }
+    val contexto = LocalContext.current
 
     fun avisar(mensaje: String) {
         alcance.launch { snackbar.showSnackbar(mensaje) }
@@ -96,6 +101,8 @@ fun LibretaScreen(usuario: Usuario, vm: LibretaViewModel = viewModel(factory = A
     fun paginaDeFecha(fecha: LocalDate): Int = PAGINA_HOY + ChronoUnit.DAYS.between(hoy, fecha).toInt()
 
     LaunchedEffect(usuario.id) { vm.iniciar(usuario) }
+    // Que el lector de códigos quede descargado mientras haya conexión, para usarlo sin ella.
+    LaunchedEffect(Unit) { Escaner.prepararModulo(contexto) }
     LaunchedEffect(descarga.mensaje) {
         descarga.mensaje?.let {
             snackbar.showSnackbar(it)
@@ -188,10 +195,13 @@ fun LibretaScreen(usuario: Usuario, vm: LibretaViewModel = viewModel(factory = A
                                 },
                             )
                             DropdownMenuItem(
-                                text = { Text("Retiro de producto (próximamente)") },
+                                text = { Text("Retiro de producto") },
                                 leadingIcon = { Icon(Icons.Filled.ShoppingCart, contentDescription = null) },
-                                enabled = false, // llega en la entrega 3c
-                                onClick = { menuAgregar = false },
+                                onClick = {
+                                    menuAgregar = false
+                                    retiroAModificar = null
+                                    retiroAbierto = true
+                                },
                             )
                         }
                     }
@@ -234,7 +244,34 @@ fun LibretaScreen(usuario: Usuario, vm: LibretaViewModel = viewModel(factory = A
                     renglonElegido = null
                     alcance.launch { snackbar.showSnackbar(vm.anularFichaje(f.id)) }
                 },
+                alModificarRetiro = { ret ->
+                    renglonElegido = null
+                    retiroAModificar = ret
+                    retiroAbierto = true
+                },
+                alAnularRetiro = { ret ->
+                    renglonElegido = null
+                    alcance.launch { snackbar.showSnackbar(vm.anularRetiro(ret.id)) }
+                },
                 alCerrar = { renglonElegido = null },
+            )
+        }
+        if (retiroAbierto) {
+            val original = retiroAModificar
+            PopupRetiro(
+                datos = d,
+                original = original,
+                buscarPorCodigo = { codigo -> vm.productoPorCodigo(codigo) },
+                alAceptar = { productoId, cantidad -> vm.guardarRetiro(productoId, cantidad, original?.id) },
+                alTerminar = { mensaje ->
+                    retiroAbierto = false
+                    retiroAModificar = null
+                    mensaje?.let { avisar(it) }
+                },
+                alCancelar = {
+                    retiroAbierto = false
+                    retiroAModificar = null
+                },
             )
         }
         if (fichajeAbierto) {

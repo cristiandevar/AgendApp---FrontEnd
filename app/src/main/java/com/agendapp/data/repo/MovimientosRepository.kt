@@ -102,6 +102,64 @@ class MovimientosRepository(private val db: AppDatabase) {
         db.fichajeDao().guardar(actual.copy(anulado = true, anuladoEn = ahora.toString(), pendiente = true))
     }
 
+    // ---------- Retiros del empleado ----------
+
+    suspend fun retirosDelDia(empleadoId: Int, fecha: LocalDate): List<Retiro> =
+        db.retiroDao().delDia(empleadoId, fecha.toString()).map { it.aDominio() }
+
+    suspend fun retiro(id: String): Retiro? = db.retiroDao().porId(id)?.aDominio()
+
+    /** Producto activo con ese código de barras o QR (el que lee el escáner). */
+    suspend fun productoPorCodigo(codigo: String): ProductoDisponible? =
+        db.productoDao().porCodigo(codigo.trim())?.aDominio()
+
+    /** Guarda un retiro ya controlado, con el precio congelado. Queda pendiente de sincronizar. */
+    suspend fun registrarRetiro(
+        empleadoId: Int,
+        fecha: LocalDate,
+        hora: LocalTime,
+        valido: Reglas.ControlRetiro.Valido,
+        registradoEn: OffsetDateTime,
+    ): Retiro {
+        val entidad = RetiroEntity(
+            id = UUID.randomUUID().toString(),
+            empleadoId = empleadoId,
+            fecha = fecha.toString(),
+            hora = hora.format(HORA_ISO),
+            productoId = valido.producto.id,
+            productoNombre = valido.producto.nombre,
+            cantidad = valido.cantidad,
+            precioCosto = valido.precioCosto,
+            registradoEn = registradoEn.toString(),
+            pendiente = true,
+        )
+        db.retiroDao().guardar(entidad)
+        return entidad.aDominio()
+    }
+
+    /**
+     * Cambia producto y/o cantidad de un retiro (mismo id, misma fecha, hora y momento de
+     * registro: el plazo se sigue contando desde el alta). Queda pendiente de sincronizar.
+     */
+    suspend fun modificarRetiro(id: String, valido: Reglas.ControlRetiro.Valido) {
+        val actual = db.retiroDao().porId(id) ?: return
+        db.retiroDao().guardar(
+            actual.copy(
+                productoId = valido.producto.id,
+                productoNombre = valido.producto.nombre,
+                cantidad = valido.cantidad,
+                precioCosto = valido.precioCosto,
+                pendiente = true,
+            )
+        )
+    }
+
+    /** Anula un retiro (nunca se borra): queda tachado y pendiente de sincronizar. */
+    suspend fun anularRetiro(id: String, ahora: OffsetDateTime) {
+        val actual = db.retiroDao().porId(id) ?: return
+        db.retiroDao().guardar(actual.copy(anulado = true, anuladoEn = ahora.toString(), pendiente = true))
+    }
+
     // ---------- Datos de ejemplo (solo para probar en debug) ----------
     // Usan ids "demo-..." y no quedan pendientes: la sincronización (Fase 4) no los envía.
 

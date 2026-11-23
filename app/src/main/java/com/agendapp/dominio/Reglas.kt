@@ -1,5 +1,6 @@
 package com.agendapp.dominio
 
+import java.math.BigDecimal
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
@@ -129,6 +130,15 @@ object Reglas {
     fun limiteDelPlazo(registradoEn: OffsetDateTime?, plazoMinutos: Int): OffsetDateTime? =
         registradoEn?.plusMinutes(plazoMinutos.toLong())
 
+    /** Segundos que faltan para que venza el plazo (0 si ya venció; null sin momento de registro). */
+    fun segundosRestantes(registradoEn: OffsetDateTime?, ahora: OffsetDateTime, plazoMinutos: Int): Long? {
+        val limite = limiteDelPlazo(registradoEn, plazoMinutos) ?: return null
+        return maxOf(Duration.between(ahora, limite).seconds, 0L)
+    }
+
+    /** Cuenta regresiva "m:ss" (125 → "2:05"). */
+    fun formatoCuentaRegresiva(segundos: Long): String = "%d:%02d".format(segundos / 60, segundos % 60)
+
     /**
      * Un fichaje solo se puede anular si es el último vigente del día: anular uno anterior
      * dejaría la secuencia entrada/salida rota (por ejemplo, una salida sin entrada).
@@ -148,7 +158,70 @@ object Reglas {
         }
 
     fun puedeCambiarRetiro(r: Retiro, ahora: OffsetDateTime, plazoMinutos: Int): Boolean =
-        !r.delEncargado && dentroDelPlazo(r.registradoEn, r.anulado, ahora, plazoMinutos)
+        impedimentoParaCambiarRetiro(r, ahora, plazoMinutos) == null
+
+    /** Por qué el empleado no puede modificar ni anular el retiro, o null si puede. */
+    fun impedimentoParaCambiarRetiro(r: Retiro, ahora: OffsetDateTime, plazoMinutos: Int): String? = when {
+        r.anulado -> "El retiro ya está anulado."
+        r.delEncargado -> "Lo cargó el encargado: solo él puede corregirlo."
+        !dentroDelPlazo(r.registradoEn, r.anulado, ahora, plazoMinutos) ->
+            "Pasó el plazo de $plazoMinutos minutos para cambiarlo. Pedile al encargado que lo corrija."
+        else -> null
+    }
+
+    /** Unidades vigentes del producto ya retiradas en la fecha (sin contar [excluirRetiroId]). */
+    fun yaRetirado(productoId: String, retiros: List<Retiro>, fecha: LocalDate, excluirRetiroId: String? = null): Int =
+        retiros
+            .filter { it.fecha == fecha && it.productoId == productoId && !it.anulado && it.id != excluirRetiroId }
+            .sumOf { it.cantidad }
+
+    /** Resultado de controlar un retiro nuevo o modificado al tocar Aceptar. */
+    sealed interface ControlRetiro {
+        /** Se puede guardar: [precioCosto] es el que queda congelado en el retiro. */
+        data class Valido(val producto: ProductoDisponible, val cantidad: Int, val precioCosto: BigDecimal) : ControlRetiro
+
+        /** Al modificar, no cambió ni el producto ni la cantidad. */
+        data object SinCambios : ControlRetiro
+
+        data class Rechazado(val mensaje: String) : ControlRetiro
+    }
+
+    /**
+     * Controles de registrar_retiro y modificar_retiro_empleado aplicados en el celular:
+     * producto activo (al modificar se puede dejar el mismo aunque ya no esté activo),
+     * cantidad de al menos 1 y máximo diario por empleado. El precio queda congelado:
+     * al modificar se conserva el original si no cambia el producto, y si cambia se toma
+     * el precio actual del producto nuevo.
+     */
+    fun controlarRetiro(
+        productoId: String?,
+        cantidad: Int,
+        productosActivos: List<ProductoDisponible>,
+        retiros: List<Retiro>,
+        fecha: LocalDate,
+        original: Retiro? = null,
+    ): ControlRetiro {
+        if (productoId == null) return ControlRetiro.Rechazado("Elegí un producto.")
+        val mismoProducto = original != null && original.productoId == productoId
+        val producto = productosActivos.firstOrNull { it.id == productoId }
+            ?: if (mismoProducto) ProductoDisponible(original!!.productoId, original.productoNombre, original.precioCosto, maxDiario = 0)
+            else return ControlRetiro.Rechazado("El producto ya no está disponible.")
+        if (cantidad < 1) return ControlRetiro.Rechazado("La cantidad tiene que ser al menos 1.")
+        if (mismoProducto && cantidad == original!!.cantidad) return ControlRetiro.SinCambios
+
+        if (producto.maxDiario > 0) {
+            val ya = yaRetirado(producto.id, retiros, fecha, original?.id)
+            if (ya + cantidad > producto.maxDiario) {
+                val disponible = maxOf(producto.maxDiario - ya, 0)
+                return ControlRetiro.Rechazado(
+                    "Supera el máximo diario de ${producto.nombre} (${producto.maxDiario}). " +
+                        "Ya retiraste $ya hoy; podés retirar hasta $disponible más."
+                )
+            }
+        }
+        val precio = if (mismoProducto) original!!.precioCosto else producto.precioCosto
+        return ControlRetiro.Valido(producto, cantidad, precio)
+    }
 
     /**
      * Unidades que el empleado todavía puede retirar hoy de un producto
@@ -161,9 +234,6 @@ object Reglas {
         excluirRetiroId: String? = null,
     ): Int? {
         if (producto.maxDiario <= 0) return null
-        val yaRetirado = retiros
-            .filter { it.fecha == fecha && it.productoId == producto.id && !it.anulado && it.id != excluirRetiroId }
-            .sumOf { it.cantidad }
-        return maxOf(producto.maxDiario - yaRetirado, 0)
+        return maxOf(producto.maxDiario - yaRetirado(producto.id, retiros, fecha, excluirRetiroId), 0)
     }
 }
