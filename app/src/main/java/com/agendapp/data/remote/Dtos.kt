@@ -41,6 +41,7 @@ data class ProductoDto(
     val nombre: String,
     @SerialName("precio_costo") @Serializable(with = BigDecimalSerializer::class) val precioCosto: BigDecimal,
     @SerialName("max_diario") val maxDiario: Int,
+    @SerialName("codigo_barra") val codigoBarra: String? = null,
     val activo: Boolean,
     val actualizado: String,
 )

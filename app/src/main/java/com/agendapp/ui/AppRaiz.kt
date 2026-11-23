@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.agendapp.ui.inicio.InicioScreen
+import com.agendapp.ui.libreta.LibretaScreen
 import com.agendapp.ui.login.LoginScreen
 
 /**
@@ -29,7 +30,10 @@ fun AppRaiz(vm: RaizViewModel = viewModel(factory = AppViewModelFactory)) {
             }
             EstadoSesion.SinSesion -> LoginScreen()
             // La clave por usuario evita reutilizar el estado de pantalla de otra sesión.
-            is EstadoSesion.ConSesion -> key(e.usuario.id) { InicioScreen(e.usuario) }
+            // Empleado: su libreta. Encargado: inicio provisorio hasta el backoffice (Fase 5).
+            is EstadoSesion.ConSesion -> key(e.usuario.id) {
+                if (e.usuario.esEncargado) InicioScreen(e.usuario) else LibretaScreen(e.usuario)
+            }
         }
     }
 }

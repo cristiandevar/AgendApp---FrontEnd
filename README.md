@@ -30,14 +30,28 @@ app/src/main/java/com/agendapp/
 ├── AgendAppApplication.kt, AppContainer.kt, MainActivity.kt
 ├── data/
 │   ├── remote/   ApiService, DTOs, errores de la API, JWT (interceptor + renovación del token)
-│   ├── local/    Room: productos, parámetros, feriados, tarifas, horarios
+│   ├── local/    Room: catálogo (productos, parámetros, feriados, tarifas, horarios)
+│   │             y movimientos del empleado (fichajes, retiros, pagos)
 │   ├── session/  SessionStore (DataStore): tokens, usuario, última descarga
-│   └── repo/     AuthRepository, CatalogoRepository
-├── ui/           tema, raíz (login o pantalla del rol), login, inicio
+│   └── repo/     AuthRepository, CatalogoRepository, MovimientosRepository
+├── dominio/      Kotlin puro: réplica de calculos.py y reglas.py del backend + armado de la hoja
+├── ui/           tema, raíz, login, libreta (empleado), inicio (encargado, provisorio)
 └── util/         formato de pesos, fechas y horas
 ```
 
 ## Tests
 
-`app/src/test` tiene tests unitarios con respuestas reales del backend (errores, DTOs, formato de pesos).
+`app/src/test` tiene tests unitarios con respuestas reales del backend (errores, DTOs, formato de pesos)
+y los tests del dominio (`dominio/CalculosTest.kt`, `FichajeTest.kt` y `RetiroTest.kt`), con los mismos
+casos y controles que el backend.
 Se corren desde Android Studio (clic derecho en la carpeta `test` → *Run Tests*) o con `gradlew test`.
+
+**Datos de ejemplo (solo debug):** en la libreta, menú ⋮ → *Cargar datos de ejemplo* agrega movimientos
+en los 3 días anteriores para ver la hoja con contenido (entradas, salidas, retiros, un anulado, uno
+fuera de horario, uno cargado por el encargado y un adelanto). *Borrar datos de ejemplo* los quita.
+No se sincronizan con el servidor.
+
+**Escáner de códigos:** el popup de retiro usa el lector de Google Play Services (no pide permiso de
+cámara). El módulo se descarga una vez con internet; después funciona sin conexión. Para probarlo, el
+`seed_agenda` del backend asigna los códigos `AGENDAPP-0001` a `AGENDAPP-0008`: se puede generar un QR
+o código de barras con ese texto y escanearlo desde la pantalla de la PC.

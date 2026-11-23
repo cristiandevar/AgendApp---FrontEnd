@@ -16,6 +16,7 @@ data class ProductoEntity(
     val maxDiario: Int,
     val activo: Boolean,
     val actualizado: String,
+    val codigoBarra: String? = null,
 )
 
 @Entity(tableName = "parametros")
@@ -51,4 +52,57 @@ data class HorarioEntity(
     val fecha: String,
     val horaInicio: String,
     val horaFin: String,
+)
+
+// ---------- Movimientos del empleado (Fase 3) ----------
+// Se generan en el celular con UUID propio. "pendiente" = todavía no se envió al
+// servidor (la sincronización llega en la Fase 4). Fecha "AAAA-MM-DD", hora "HH:MM:SS",
+// momentos (registradoEn, anuladoEn) en ISO con zona horaria.
+
+@Entity(tableName = "fichajes", indices = [Index(value = ["empleadoId", "fecha"])])
+data class FichajeEntity(
+    @PrimaryKey val id: String,
+    val empleadoId: Int,
+    val fecha: String,
+    val hora: String,
+    val tipo: String,                 // ENTRADA | SALIDA
+    val motivo: String = "",
+    val fueraDeTolerancia: Boolean = false,
+    val anulado: Boolean = false,
+    val anuladoEn: String? = null,
+    val origen: String = "EMPLEADO",  // EMPLEADO | ENCARGADO
+    val corregido: Boolean = false,
+    val registradoEn: String,
+    val pendiente: Boolean = true,
+)
+
+@Entity(tableName = "retiros", indices = [Index(value = ["empleadoId", "fecha"])])
+data class RetiroEntity(
+    @PrimaryKey val id: String,
+    val empleadoId: Int,
+    val fecha: String,
+    val hora: String,
+    val productoId: String,
+    val productoNombre: String,
+    val cantidad: Int,
+    val precioCosto: BigDecimal,      // congelado al momento del retiro
+    val anulado: Boolean = false,
+    val anuladoEn: String? = null,
+    val origen: String = "EMPLEADO",
+    val corregido: Boolean = false,
+    val registradoEn: String,
+    val pendiente: Boolean = true,
+)
+
+/** Montos recibidos (los registra el encargado; llegan con la sincronización). */
+@Entity(tableName = "pagos", indices = [Index(value = ["empleadoId", "fecha"])])
+data class PagoEntity(
+    @PrimaryKey val id: String,
+    val empleadoId: Int,
+    val fecha: String,
+    val hora: String,
+    val monto: BigDecimal,
+    val tipo: String,                 // LIQUIDACION | ADELANTO
+    val descripcion: String,          // "Liquidación del 01/11 al 15/11" / "Adelanto"
+    val anulado: Boolean = false,
 )

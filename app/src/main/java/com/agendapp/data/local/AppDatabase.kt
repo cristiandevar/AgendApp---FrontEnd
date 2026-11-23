@@ -24,8 +24,11 @@ class Convertidores {
         FeriadoEntity::class,
         TarifaEntity::class,
         HorarioEntity::class,
+        FichajeEntity::class,
+        RetiroEntity::class,
+        PagoEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Convertidores::class)
@@ -35,9 +38,20 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun feriadoDao(): FeriadoDao
     abstract fun tarifaDao(): TarifaDao
     abstract fun horarioDao(): HorarioDao
+    abstract fun fichajeDao(): FichajeDao
+    abstract fun retiroDao(): RetiroDao
+    abstract fun pagoDao(): PagoDao
 
     companion object {
+        /**
+         * Versión 1 (Fase 2) solo tenía el catálogo, que se vuelve a descargar: se puede
+         * recrear sin perder nada. Desde la versión 2 hay movimientos del empleado que
+         * pueden estar sin sincronizar, así que toda migración futura tiene que ser real
+         * (nunca destructiva).
+         */
         fun crear(context: Context): AppDatabase =
-            Room.databaseBuilder(context, AppDatabase::class.java, "agendapp.db").build()
+            Room.databaseBuilder(context, AppDatabase::class.java, "agendapp.db")
+                .fallbackToDestructiveMigrationFrom(1)
+                .build()
     }
 }

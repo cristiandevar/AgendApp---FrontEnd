@@ -54,7 +54,7 @@ class CatalogoRepository(
         db.withTransaction {
             db.productoDao().borrarTodo()
             db.productoDao().insertar(d.productos.map {
-                ProductoEntity(it.id, it.nombre, it.precioCosto, it.maxDiario, it.activo, it.actualizado)
+                ProductoEntity(it.id, it.nombre, it.precioCosto, it.maxDiario, it.activo, it.actualizado, it.codigoBarra)
             })
             db.parametroDao().borrarTodo()
             db.parametroDao().insertar(d.parametros.map {

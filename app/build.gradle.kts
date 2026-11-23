@@ -26,7 +26,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.2.0"
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -84,6 +84,10 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
+
+    // Lector de códigos de barras y QR de Google: no pide permiso de cámara.
+    implementation(libs.play.services.code.scanner)
+    implementation(libs.play.services.base)
 
     testImplementation(libs.junit)
 }

@@ -64,7 +64,7 @@ class InicioViewModel(
      */
     fun alIniciar(usuario: Usuario) {
         viewModelScope.launch {
-            if (catalogo.ultimaDescarga.first() == null) actualizar(usuario)
+            if (catalogo.ultimaDescarga.first() == null || catalogo.productos.first().isEmpty()) actualizar(usuario)
         }
     }
 
