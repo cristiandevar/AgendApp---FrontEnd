@@ -23,6 +23,14 @@ El backend está en el repositorio **AgendApp - BackEnd**. El plan de fases vive
 
 Usuarios de prueba (del `seed_agenda` del backend): `ana` / `ana12345` (empleado) y `encargado` / `encargado123`.
 
+## Documentación
+
+| Para | Documento |
+|---|---|
+| Entender la app | [Arquitectura](docs/desarrollo/arquitectura.md) · [Dominio](docs/desarrollo/dominio.md) · [La libreta (UI)](docs/desarrollo/libreta.md) |
+| Aportar código | [Cómo aportar](docs/desarrollo/como-aportar.md) |
+| Usar la app (empleado) | [Guía del empleado](docs/uso/guia-del-empleado.md) |
+
 ## Estructura
 
 ```
@@ -35,7 +43,8 @@ app/src/main/java/com/agendapp/
 │   ├── session/  SessionStore (DataStore): tokens, usuario, última descarga
 │   └── repo/     AuthRepository, CatalogoRepository, MovimientosRepository
 ├── dominio/      Kotlin puro: réplica de calculos.py y reglas.py del backend + armado de la hoja
-├── ui/           tema, raíz, login, libreta (empleado), inicio (encargado, provisorio)
+├── ui/           tema, raíz, login, libreta (empleado: hoja, fichajes, retiros, escáner),
+│                 inicio (encargado, provisorio)
 └── util/         formato de pesos, fechas y horas
 ```
 
